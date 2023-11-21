@@ -21,9 +21,9 @@
 # generate an example file
 Example() {
   EXAMPLE_FILE="example.csv";
-  EXAMPLE_LINE="https://<your-git-server>/<repository-path>";
-  EXAMPLE_LINE="${EXAMPLE_LINE},https://github.com/<owner>/<repository-name>"
-  echo -e "${EXAMPLE_LINE}\n" >> ${EXAMPLE_FILE};
+  EXAMPLE_LINE="https://<your-git-server>/<repository>.git";
+  EXAMPLE_LINE="${EXAMPLE_LINE},https://github.com/<owner>/<repository>.git"
+  echo -e "${EXAMPLE_LINE}\n" > ${EXAMPLE_FILE};
   echo -e "\nExample file created at $(pwd)/${EXAMPLE_FILE}\n";
 }
 
@@ -34,6 +34,7 @@ Usage()
 Usage: migrate.sh [options]
 
 Options:
+     -c, --clean   : Whether to clean up git repositories or not
      -e, --example : Generate example inputer CSV file
      -f, --force   : Whether to force push in Git
      -h, --help    : Show script help
@@ -55,12 +56,16 @@ EOM
 # Global Variables #
 #------------------#
 
-TIMESTAMP=$(date +%y%m%d%H%M%S)
-TIMESTAMP_F="${TIMESTAMP}.log"
-PARAMS=""
-INPUT_DATA=""
-LOG=true
-FORCE=false
+CLEAN=false;
+FORCE=false;
+INPUT_DATA="";
+LOG=true;
+PARAMS="";
+REPOS_D="repos";
+SOURCE_D="$(pwd)";
+TIMESTAMP=$(date +%y%m%d%H%M%S);
+TIMESTAMP_F="${TIMESTAMP}.log";
+TOTAL_REPOS=0;
 
 #---------------------------------------#
 # Get parameters from script invocation #
@@ -68,6 +73,10 @@ FORCE=false
 
 while (( "$#" )); do
   case "$1" in
+    -c|--clean)
+      CLEAN=true;
+      shift
+      ;;
     -e|--example)
       Example;
       exit 0
@@ -106,6 +115,69 @@ done
 # main processing functions of scripting #
 #----------------------------------------#
 
+# removes data after process completes
+Cleanup() {
+  if [ ${CLEAN} = true ]; then
+    rm -rf ${REPOS_D};
+  fi
+}
+
+# uses the INPUT_DATA global and runs through the process
+CloneAndPush() {
+
+  # validate data one more time
+  if [ -z "${INPUT_DATA}" ]; then
+    Output "Something went wrong. There's no repositories to process." 1;
+  fi
+
+  # loop repos in csv
+  I=1;
+  while IFS="," read -r SOURCE DESTINATION; do
+
+    # skip potentially empty lines
+    if [ ! -z "${SOURCE}" ]; then
+
+      REPOS_D_ABS=${SOURCE_D}/${REPOS_D}
+
+      Output "${I} of ${TOTAL_REPOS}: Processing...";
+      cd ${REPOS_D_ABS}
+
+      # make sure repo doesn't exist
+      REPO_D="${REPOS_D_ABS}/${SOURCE##*/}";
+      if [ -d ${REPO_D} ]; then
+        rm -rf ${REPO_D};
+      fi
+
+      # clone the repo
+      git clone --mirror ${SOURCE};
+
+      # change directory to repo
+      cd ${REPOS_D_ABS}/${SOURCE##*/};
+
+      # get LFS objects
+      git lfs fetch origin --all
+
+      # change origin remote url
+      git remote add destination ${DESTINATION};
+
+      # determine if force is required
+      FORCE_CMD="";
+      if [ ${FORCE} = true ]; then
+        FORCE_CMD="--force";
+      fi
+
+      # push
+      git push --mirror destination ${FORCE_CMD};
+
+      # sync LFS objects
+      git lfs push destination --all
+
+      I=$((I+1));
+    fi
+  done <<< "${INPUT_DATA}"
+
+}
+
 # loads the contents of the CSV file
 LoadCSV() {
   Output "Loading CSV file '${INPUT_CSV}'...";
@@ -119,7 +191,6 @@ LoadCSV() {
   INPUT_DATA=$(<${INPUT_CSV});
 
   # get total number of repos
-  TOTAL_REPOS=0;
   while IFS= read -r LINE; do
     if [[ ! -z "${LINE}" ]]; then
       TOTAL_REPOS=$((TOTAL_REPOS+1));
@@ -146,31 +217,44 @@ Output() {
   else
     echo "${MESSAGE}";
   fi
-  if [ ${ERROR} = true ]; then exit ${2}; fi
+  if [ ${ERROR} = true ]; then echo ""; exit ${2}; fi
 }
 
 # pre-process step for setting things up
 PreProcess() {
+  # create log if needed
   if [ ${LOG} = true ]; then
     echo -n "" > ${TIMESTAMP_F};
   fi
+  # create repo folder
+  mkdir -p ${REPOS_D}
 }
 
 # run through all processees for script
 Process() {
   PreProcess;
-  ValidateInput;
+  Validate;
   LoadCSV;
+  CloneAndPush;
+  Cleanup;
 }
 
 # validate all inputs and dependencies
-ValidateInput() {
+Validate() {
   # check inputs
   if [ -z "${INPUT_CSV}" ]; then
     Output "Error: Please provide a CSV file containing a \
 list of repositories with -i. Use -e to generate an example." 1;
   elif [ ! -f "${INPUT_CSV}" ]; then
     Output "Error: File at path '${INPUT_CSV}' does not exist." 1;
+  fi
+  # check dependencies
+  if ! [ -x "$(command -v git)" ]; then
+    Output 'Error: Git is not installed. Please see https://git-scm.com/downloads' 1;
+  fi
+  # check dependencies
+  if ! [ -x "$(command -v git-lfs)" ]; then
+    Output 'Error: Git LFS is not installed. Please see https://git-lfs.com' 1;
   fi
 }
 
@@ -182,5 +266,6 @@ echo "";
 echo "#-------------------------------#";
 echo "# Git-to-Git Migration with LFS #";
 echo "#-------------------------------#";
+echo "";
 Process;
 echo "";
