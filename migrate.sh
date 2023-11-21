@@ -34,10 +34,11 @@ Usage()
 Usage: migrate.sh [options]
 
 Options:
-     -h, --help    : Show script help
      -e, --example : Generate example inputer CSV file
-     -i, --input   : CSV file containing repository URL list
      -f, --force   : Whether to force push in Git
+     -h, --help    : Show script help
+     -i, --input   : CSV file containing repository URL list
+     -n, --no-log  : Do not create log file
 
 Description:
   Tooling to support cloning a repository from one git source to another with 
@@ -54,9 +55,12 @@ EOM
 # Global Variables #
 #------------------#
 
-TIMESTAMP_F="$(date +%y%m%d%H%M%S).log"
+TIMESTAMP=$(date +%y%m%d%H%M%S)
+TIMESTAMP_F="${TIMESTAMP}.log"
 PARAMS=""
 INPUT_DATA=""
+LOG=true
+FORCE=false
 
 #---------------------------------------#
 # Get parameters from script invocation #
@@ -64,6 +68,14 @@ INPUT_DATA=""
 
 while (( "$#" )); do
   case "$1" in
+    -e|--example)
+      Example;
+      exit 0
+      ;;
+    -f|--force)
+      FORCE=true;
+      shift
+      ;;
     -h|--help)
       Usage;
       ;;
@@ -71,9 +83,9 @@ while (( "$#" )); do
       INPUT_CSV=$2
       shift 2
       ;;
-    -e|--example)
-      Example;
-      exit 0
+    -n|--no-log)
+      LOG=false;
+      shift
       ;;
     --) # end argument parsing
       shift
@@ -115,20 +127,33 @@ LoadCSV() {
   done <<< "${INPUT_DATA}"
 
   if [ ${TOTAL_REPOS} -le 0 ]; then
-    Output "Error: No repositories were provided in the CSV file.";
-    exit 1;
+    Output "Error: No repositories were provided in the CSV file." 1;
   fi
   Output "${TOTAL_REPOS} repositories to process.";
 }
 
 # helper to output to CLI and log
 Output() {
-  echo "${1}" | tee -a ${TIMESTAMP_F}; 
+  ERROR=false
+  TYPE=""
+  if [ ! -z "${2}" ] && [ ${2} -gt 0 ]; then
+    TYPE="[ERROR]"
+    ERROR=true
+  fi
+  MESSAGE="$(date '+%Y-%m-%d %H:%M:%S') ${TYPE} ${1}";
+  if [ ${LOG} = true ]; then
+    echo "${MESSAGE}" | tee -a ${TIMESTAMP_F};
+  else
+    echo "${MESSAGE}";
+  fi
+  if [ ${ERROR} = true ]; then exit ${2}; fi
 }
 
 # pre-process step for setting things up
 PreProcess() {
-  echo -n "" > ${TIMESTAMP_F};
+  if [ ${LOG} = true ]; then
+    echo -n "" > ${TIMESTAMP_F};
+  fi
 }
 
 # run through all processees for script
@@ -141,13 +166,11 @@ Process() {
 # validate all inputs and dependencies
 ValidateInput() {
   # check inputs
-  if [[ -z "${INPUT_CSV}" ]]; then
+  if [ -z "${INPUT_CSV}" ]; then
     Output "Error: Please provide a CSV file containing a \
-list of repositories with -i. Use -e to generate an example."
-    exit 1;
-  elif [[ ! -f "${INPUT_CSV}" ]]; then
-    Output "Error: File at path '${INPUT_CSV}' does not exist.";
-    exit 1;
+list of repositories with -i. Use -e to generate an example." 1;
+  elif [ ! -f "${INPUT_CSV}" ]; then
+    Output "Error: File at path '${INPUT_CSV}' does not exist." 1;
   fi
 }
 
@@ -155,4 +178,9 @@ list of repositories with -i. Use -e to generate an example."
 # Script Invocation #
 #-------------------#
 
+echo "";
+echo "#-------------------------------#";
+echo "# Git-to-Git Migration with LFS #";
+echo "#-------------------------------#";
 Process;
+echo "";
