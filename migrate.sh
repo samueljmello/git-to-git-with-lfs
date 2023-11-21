@@ -64,7 +64,7 @@ PARAMS="";
 REPOS_D="repos";
 SOURCE_D="$(pwd)";
 TIMESTAMP=$(date +%y%m%d%H%M%S);
-TIMESTAMP_F="${TIMESTAMP}.log";
+TIMESTAMP_F="${SOURCE_D}/${TIMESTAMP}.log";
 TOTAL_REPOS=0;
 
 #---------------------------------------#
@@ -118,7 +118,8 @@ done
 # removes data after process completes
 Cleanup() {
   if [ ${CLEAN} = true ]; then
-    rm -rf ${REPOS_D};
+    Output "Cleaning up repository data...";
+    rm -rf ${SOURCE_D}/${REPOS_D};
   fi
 }
 
@@ -139,26 +140,29 @@ CloneAndPush() {
 
       REPOS_D_ABS=${SOURCE_D}/${REPOS_D}
 
-      Output "${I} of ${TOTAL_REPOS}: Processing...";
       cd ${REPOS_D_ABS}
 
       # make sure repo doesn't exist
       REPO_D="${REPOS_D_ABS}/${SOURCE##*/}";
       if [ -d ${REPO_D} ]; then
-        rm -rf ${REPO_D};
+        Output "${I} of ${TOTAL_REPOS}: cleaning existing repo...";
+        ExecAndLog "rm -rf ${REPO_D}";
       fi
 
       # clone the repo
-      git clone --mirror ${SOURCE};
+      Output "${I} of ${TOTAL_REPOS}: cloning source repo...";
+      ExecAndLog "git clone --bare ${SOURCE}";
 
       # change directory to repo
       cd ${REPOS_D_ABS}/${SOURCE##*/};
 
       # get LFS objects
-      git lfs fetch origin --all
+      Output "${I} of ${TOTAL_REPOS}: getting any LFS objects...";
+      ExecAndLog "git lfs fetch origin --all";
 
       # change origin remote url
-      git remote add destination ${DESTINATION};
+      Output "${I} of ${TOTAL_REPOS}: adding new remote...";
+      ExecAndLog "git remote add destination ${DESTINATION}";
 
       # determine if force is required
       FORCE_CMD="";
@@ -167,10 +171,12 @@ CloneAndPush() {
       fi
 
       # push
-      git push --mirror destination ${FORCE_CMD};
+      Output "${I} of ${TOTAL_REPOS}: pushing to new remote...";
+      ExecAndLog "git push --mirror destination ${FORCE_CMD}"
 
       # sync LFS objects
-      git lfs push destination --all
+      Output "${I} of ${TOTAL_REPOS}: pushing LFS objects...";
+      ExecAndLog "git lfs push destination --all";
 
       I=$((I+1));
     fi
@@ -211,13 +217,25 @@ Output() {
     TYPE="[ERROR]"
     ERROR=true
   fi
-  MESSAGE="$(date '+%Y-%m-%d %H:%M:%S') ${TYPE} ${1}";
-  if [ ${LOG} = true ]; then
-    echo "${MESSAGE}" | tee -a ${TIMESTAMP_F};
-  else
-    echo "${MESSAGE}";
-  fi
+  Log "$(date '+%Y-%m-%d %H:%M:%S') ${TYPE} ${1}";
   if [ ${ERROR} = true ]; then echo ""; exit ${2}; fi
+}
+
+ExecAndLog() {
+  if [ ${LOG} = true ]; then
+    ${1} 2>&1 | tee -a ${TIMESTAMP_F};
+  else
+    ${1} 2>&1;
+  fi
+}
+
+# log helper method
+Log() {
+  if [ ${LOG} = true ]; then
+    echo "${1}" | tee -a ${TIMESTAMP_F};
+  else
+    echo "${1}";
+  fi
 }
 
 # pre-process step for setting things up
