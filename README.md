@@ -5,8 +5,7 @@ Tooling to support copying a repository from one git source to another, includin
 - [Git](https://git-scm.com/downloads)
 - [Git LFS](https://git-lfs.com)
 - Bash Compatible Terminal
-- SSH credentials configured
-- ...
+- Git credentials configured
 
 ## Functionality
 This script is a very simple bash script that:
