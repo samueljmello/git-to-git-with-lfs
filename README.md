@@ -21,6 +21,11 @@ This script is a very simple bash script that:
 ## Assumptions
 - Authentication to repositories is handled via SSH or credentials manager (based on your OS).
 
+## Caveats
+Depending on how many repositories and their respective size, this script could take significant time to complete. The processing is accomplished in series, not parallel, which means only one repository is processed at a time. You will want to run this on a dedicated machine that has time to complete without interuption or system down time.
+
+Additionally, the script assumes your destination repositories exist already. Future work may include repository detection, but would require additional input from the executor increasing the amount of work up-front.
+
 ## Usage
 
 - Print usage help: `./migrate.sh -h`
