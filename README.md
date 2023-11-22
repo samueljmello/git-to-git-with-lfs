@@ -22,24 +22,13 @@ This script is a very simple bash script that:
 - Authentication to repositories is handled via SSH or credentials manager (based on your OS).
 
 ## Usage
-```sh
-Usage: migrate.sh [options]
 
-Options:
-     -c, --clean   : Whether to clean up git repositories or not
-     -e, --example : Generate example inputer CSV file
-     -f, --force   : Whether to force push in Git
-     -h, --help    : Show script help
-     -i, --input   : CSV file containing repository URL list
-     -n, --no-log  : Do not create log file
+- Print usage help: `./migrate.sh -h`
 
-Description:
-  Tooling to support cloning a repository from one git source to another with 
-  LFS objects.
+- Generate example CSV: `./migrate.sh -e`
 
-Example:
-  migrate.sh -i repositories.csv
-```
+- Normal operation: `./migrate.sh -i example.csv`
 
-## Notes
-- Make sure to have a newline at the end of your CSV File. Without, the last line won't be read correctly.
+- Cleanup after normal operation: `./migrate.sh -i example.csv -c`
+
+Print usage help for all options.
