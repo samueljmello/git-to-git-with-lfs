@@ -5,7 +5,8 @@ Tooling to support copying a repository from one git source to another, includin
 - [Git](https://git-scm.com/downloads)
 - [Git LFS](https://git-lfs.com)
 - Bash Compatible Terminal
-- Git credentials configured
+- Git credentials configured for respository sources
+- JQ
 
 ## Functionality
 This script is a very simple bash script that:
@@ -27,6 +28,9 @@ Depending on how many repositories and their respective size, this script could 
 Additionally, the script assumes your destination repositories exist already. Future work may include repository detection, but would require additional input from the executor increasing the amount of work up-front.
 
 ## Usage
+First, export your Github PAT (`export GH_PAT="<your-pat>"`) and then follow the syntax described below.
+
+If you want to pass the PAT via CLI, use the `-p` or `--pat` flags.
 
 - Print usage help: `./migrate.sh -h`
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash -e
 
-#-------------------------------#
-# Git-to-Git Migration with LFS #
-#-------------------------------#
+#----------------------------------#
+# Git-to-Github Migration with LFS #
+#----------------------------------#
 
 # This tooling is provided free and with no support. Use at your own discretion.
 # It's goal is to take a CSV of repositories, clone them, push them to new
-# remotes, and then sync LFS objects. This alleviates the manual task of making
-# sure LFS objects have been transferred
+# Github remotes, and then sync LFS objects. This alleviates the manual task 
+# of making sure LFS objects have been transferred
 
 # Scripting assumes:
 # - Git is installed
@@ -19,11 +19,14 @@
 #-------------------------------------#
 
 # generate an example file
+HEADERS="source_git_url,destination_owner,destination_repo";
 Example() {
   EXAMPLE_FILE="example.csv";
+  echo "${HEADERS}" > ${EXAMPLE_FILE};
   EXAMPLE_LINE="https://<your-git-server>/<repository>.git";
-  EXAMPLE_LINE="${EXAMPLE_LINE},https://github.com/<owner>/<repository>.git"
-  echo -e "${EXAMPLE_LINE}\n" > ${EXAMPLE_FILE};
+  EXAMPLE_LINE="${EXAMPLE_LINE},<github-org-or-user>";
+  EXAMPLE_LINE="${EXAMPLE_LINE},<github-repo-name>";
+  echo "${EXAMPLE_LINE}" >> ${EXAMPLE_FILE};
   echo -e "\nExample file created at $(pwd)/${EXAMPLE_FILE}\n";
 }
 
@@ -40,6 +43,9 @@ Options:
      -h, --help    : Show script help
      -i, --input   : CSV file containing repository URL list
      -n, --no-log  : Do not create log file
+     -p, --pat     : Personal access token for Github HTTPS authentication.
+                     Do not provide if you have your PAT token stored in the
+                     environment variable GH_PAT. Must have "repo:all" scopes.
 
 Description:
   Tooling to support cloning a repository from one git source to another with 
@@ -96,6 +102,10 @@ while (( "$#" )); do
       LOG=false;
       shift
       ;;
+    -p|--pat)
+      GH_PAT=$2
+      shift 2
+      ;;
     --) # end argument parsing
       shift
       break
@@ -126,6 +136,8 @@ Cleanup() {
 # uses the INPUT_DATA global and runs through the process
 CloneAndPush() {
 
+  Output "Starting clone & push process...";
+
   # validate data one more time
   if [ -z "${INPUT_DATA}" ]; then
     Output "Something went wrong. There's no repositories to process." 1;
@@ -133,17 +145,21 @@ CloneAndPush() {
 
   # loop repos in csv
   I=1;
-  while IFS="," read -r SOURCE DESTINATION; do
+  while IFS="," read -r S DO DR; do
 
-    # skip potentially empty lines
-    if [ ! -z "${SOURCE}" ]; then
+    # skip potentially empty lines or header row
+    LINE="${S},${DO},${DR}";
+    if [[ ! -z "${S}" && ! -z "${DO}" && ! -z "${DR}" && "${LINE}" != "${HEADERS}" ]]; then
 
       REPOS_D_ABS=${SOURCE_D}/${REPOS_D}
 
       cd ${REPOS_D_ABS}
 
+      DESTINATION="https://github.com/${DO}";
+      DESTINATION="${DESTINATION}/${DR}.git";
+
       # make sure repo doesn't exist
-      REPO_D="${REPOS_D_ABS}/${SOURCE##*/}";
+      REPO_D="${REPOS_D_ABS}/${S##*/}";
       if [ -d ${REPO_D} ]; then
         Output "${I} of ${TOTAL_REPOS}: cleaning existing repo...";
         ExecAndLog "rm -rf ${REPO_D}";
@@ -151,14 +167,22 @@ CloneAndPush() {
 
       # clone the repo
       Output "${I} of ${TOTAL_REPOS}: cloning source repo...";
-      ExecAndLog "git clone --bare ${SOURCE}";
+      ExecAndLog "git clone --bare ${S}";
 
       # change directory to repo
-      cd ${REPOS_D_ABS}/${SOURCE##*/};
+      cd ${REPOS_D_ABS}/${S##*/};
 
       # get LFS objects
       Output "${I} of ${TOTAL_REPOS}: getting any LFS objects...";
       ExecAndLog "git lfs fetch origin --all";
+
+      # set up headers for API requests
+      Output "${I} of ${TOTAL_REPOS}: Creating repository '${DR}' on Github...";
+      CREATE_REPO=$(curl -L \
+        -H "Authorization:Bearer ${GH_PAT}" \
+        -X POST -d "{\"name\":\"${DR}\",\"private\":true}" \
+        https://api.github.com/orgs/${DO}/repos)
+      Output "${CREATE_REPO}"
 
       # change origin remote url
       Output "${I} of ${TOTAL_REPOS}: adding new remote...";
@@ -179,6 +203,8 @@ CloneAndPush() {
       ExecAndLog "git lfs push destination --all";
 
       I=$((I+1));
+    elif [[ "${LINE}" != "${HEADERS}" ]]; then
+      Output "Skipping invalid line: '${LINE}'";
     fi
   done <<< "${INPUT_DATA}"
 
@@ -198,7 +224,7 @@ LoadCSV() {
 
   # get total number of repos
   while IFS= read -r LINE; do
-    if [[ ! -z "${LINE}" ]]; then
+    if [[ ! -z "${LINE}" ]] && [[ "${LINE}" != "${HEADERS}" ]]; then
       TOTAL_REPOS=$((TOTAL_REPOS+1));
     fi
   done <<< "${INPUT_DATA}"
@@ -270,9 +296,14 @@ list of repositories with -i. Use -e to generate an example." 1;
   if ! [ -x "$(command -v git)" ]; then
     Output 'Error: Git is not installed. Please see https://git-scm.com/downloads' 1;
   fi
-  # check dependencies
   if ! [ -x "$(command -v git-lfs)" ]; then
     Output 'Error: Git LFS is not installed. Please see https://git-lfs.com' 1;
+  fi
+  if ! [ -x "$(command -v jq)" ]; then
+    Output 'Error: JQ is not installed. Please see https://jqlang.github.io/jq' 1;
+  fi
+  if [[ -z "${GH_PAT}" ]]; then
+    Output 'You must provide a Github PAT via environment variable GH_PAT or the --pat flag.' 1;
   fi
 }
 

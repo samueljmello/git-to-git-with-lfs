@@ -1,3 +1,4 @@
 *.csv
 *.log
 repos/
+.DS_Store
