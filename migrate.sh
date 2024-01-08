@@ -184,6 +184,10 @@ CloneAndPush() {
         https://api.github.com/orgs/${DO}/repos)
       Output "${CREATE_REPO}"
 
+      # Get default branch
+      Output "${I} of ${TOTAL_REPOS}: setting default branch...";
+      DEFAULT=$(git branch --show-current)
+
       # change origin remote url
       Output "${I} of ${TOTAL_REPOS}: adding new remote...";
       ExecAndLog "git remote add destination ${DESTINATION}";
@@ -194,8 +198,12 @@ CloneAndPush() {
         FORCE_CMD="--force";
       fi
 
+      # push main branch
+      Output "${I} of ${TOTAL_REPOS}: pushing default branch '${DEFAULT}'...";
+      ExecAndLog "git push destination ${DEFAULT}:${DEFAULT} ${FORCE_CMD}"
+
       # push
-      Output "${I} of ${TOTAL_REPOS}: pushing to new remote...";
+      Output "${I} of ${TOTAL_REPOS}: mirroring the full repository...";
       ExecAndLog "git push --mirror destination ${FORCE_CMD}"
 
       # sync LFS objects
